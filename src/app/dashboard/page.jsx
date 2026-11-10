@@ -1,143 +1,129 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
-import api from "@/lib/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Building2, FileText, Tag, FolderOpen, Plus, ArrowRight } from "lucide-react";
-import { toast } from "sonner";
-import gsap from "gsap";
+import { getCompanies } from "@/lib/api";
 import LineLoader from "@/components/layout/LineLoader";
+import { useGsap } from "@/hooks/useGsap";
+import { toast } from "sonner";
 
 export default function DashboardPage() {
-  const [data, setData] = useState(null);
+  const [companies, setCompanies] = useState([]);
   const [loading, setLoading] = useState(true);
-  const containerRef = useRef(null);
-
-  useEffect(() => { fetchStats(); }, []);
+  const cardsRef = useRef(null);
+  const { animateStagger } = useGsap();
 
   useEffect(() => {
-    if (!loading && containerRef.current) {
-      const cards = containerRef.current.querySelectorAll(".stat-card");
-      gsap.fromTo(cards, { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.5, stagger: 0.1, ease: "power3.out" });
-    }
-  }, [loading]);
+    fetchCompanies();
+  }, []);
 
-  const fetchStats = async () => {
+  async function fetchCompanies() {
     try {
-      const res = await api.get("/dashboard/stats");
-      setData(res.data);
-    } catch (error) {
-      toast.error("Failed to load dashboard");
+      setLoading(true);
+      const res = await getCompanies();
+      // FIX: Handle both raw arrays and wrapped response formats
+      const data = res.data?.data || res.data;
+      
+      if (Array.isArray(data)) {
+        setCompanies(data);
+      } else {
+        toast.error("Unexpected data format from server");
+      }
+    } catch (err) {
+      toast.error("Connection error. Is backend server running?");
     } finally {
       setLoading(false);
     }
-  };
+  }
 
-  const stats = [
-    { label: "Companies", value: data?.stats?.totalCompanies || 0, icon: Building2, color: "bg-blue-500", link: "/dashboard/companies" },
-    { label: "Cover Letters", value: data?.stats?.totalCoverLetters || 0, icon: FileText, color: "bg-red-500", link: "/dashboard/cover-letters" },
-    { label: "Tags", value: data?.stats?.totalTags || 0, icon: Tag, color: "bg-amber-500", link: "/dashboard/tags" },
-    { label: "Tenders", value: data?.stats?.totalTenders || 0, icon: FolderOpen, color: "bg-emerald-500", link: "/dashboard/tenders" },
-  ];
+  useEffect(() => {
+    if (!loading && companies.length > 0 && cardsRef.current) {
+      animateStagger(cardsRef.current.children, 0.08);
+    }
+  }, [loading, companies]);
+
+  if (loading) return <LineLoader />;
 
   return (
-    <>
-      <LineLoader loading={loading} />
-      <div ref={containerRef}>
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-zinc-900 dark:text-white">Dashboard</h1>
-            <p className="text-zinc-500 dark:text-zinc-400 mt-1">Overview of your tender operations</p>
-          </div>
-          <div className="flex gap-3">
-            <Button asChild className="bg-red-600 hover:bg-red-700">
-              <Link href="/dashboard/cover-letters/new"><Plus className="w-4 h-4 mr-2" />Cover Letter</Link>
-            </Button>
-            <Button asChild variant="outline">
-              <Link href="/dashboard/tags/new"><Plus className="w-4 h-4 mr-2" />Tags</Link>
-            </Button>
-          </div>
+    <div className="space-y-8 pb-12">
+      {/* Header Banner */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-red-600 via-rose-600 to-red-700 p-8 md:p-10 text-white shadow-2xl shadow-red-500/20">
+        <div className="relative z-10 max-w-2xl space-y-3">
+          <span className="inline-block px-3 py-1 bg-white/10 backdrop-blur-md rounded-full text-xs font-semibold tracking-wider uppercase border border-white/20">
+            Tender Document Management System
+          </span>
+          <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight">
+            Crimson Group Workspaces
+          </h1>
+          <p className="text-white/80 text-sm md:text-base leading-relaxed">
+            Select a company below to generate standardized cover letters,
+            financial/technical item tags, and envelope labels.
+          </p>
+        </div>
+        <div className="absolute -right-10 -bottom-10 w-72 h-72 bg-white/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute right-40 top-0 w-40 h-40 bg-black/10 rounded-full blur-2xl pointer-events-none" />
+      </div>
+
+      {/* Grid of Companies — no icons */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold text-foreground tracking-tight flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-red-500" />
+            Sister Companies ({companies.length})
+          </h2>
+          <span className="text-xs text-muted-foreground">
+            Click any card to start generating documents
+          </span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
-          {stats.map((stat, i) => (
-            <Link key={i} href={stat.link}>
-              <Card className="stat-card hover:shadow-lg transition-all duration-300 cursor-pointer border-zinc-200 dark:border-zinc-800 hover:border-red-300 dark:hover:border-red-800">
-                <CardContent className="pt-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-zinc-500 dark:text-zinc-400">{stat.label}</p>
-                      <h3 className="text-3xl font-bold text-zinc-900 dark:text-white mt-1">{stat.value}</h3>
-                    </div>
-                    <div className={`w-12 h-12 rounded-xl ${stat.color} flex items-center justify-center shadow-lg`}>
-                      <stat.icon className="w-6 h-6 text-white" />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+        <div
+          ref={cardsRef}
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+        >
+          {companies.map((company) => (
+            <Link
+              key={company._id}
+              href={`/dashboard/company/${company._id}`}
+              className="group relative glass rounded-3xl p-6 border border-slate-200/80 dark:border-slate-800/80 hover:border-red-500/50 dark:hover:border-red-500/50 transition-all duration-300 hover:shadow-2xl hover:shadow-red-500/10 hover:-translate-y-1 flex flex-col justify-between"
+            >
+              <div className="space-y-3">
+                {/* Code badge only — no logo/icon box */}
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-mono font-bold px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 group-hover:bg-red-50 dark:group-hover:bg-red-950/40 group-hover:text-red-600 dark:group-hover:text-red-400 transition-colors">
+                    {company.code || company.shortName}
+                  </span>
+                </div>
+
+                <div>
+                  <h3 className="text-xl font-bold text-foreground group-hover:text-red-500 transition-colors line-clamp-2">
+                    {company.name}
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                    {company.address || "Standard Procurement Tender Workspace"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800/60 flex items-center justify-between text-xs font-semibold text-slate-600 dark:text-slate-400 group-hover:text-red-500 dark:group-hover:text-red-400 transition-colors">
+                <span>Open Workspace</span>
+                <svg
+                  className="w-4 h-4 transform group-hover:translate-x-1 transition-transform"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M14 5l7 7m0 0l-7 7m7-7H3"
+                  />
+                </svg>
+              </div>
             </Link>
           ))}
         </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card className="border-zinc-200 dark:border-zinc-800">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-lg">Recent Cover Letters</CardTitle>
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/dashboard/cover-letters">View All <ArrowRight className="w-4 h-4 ml-1" /></Link>
-              </Button>
-            </CardHeader>
-            <CardContent>
-              {data?.recentCoverLetters?.length > 0 ? (
-                <div className="space-y-3">
-                  {data.recentCoverLetters.map((cl) => (
-                    <div key={cl._id} className="flex items-center justify-between p-3 rounded-lg bg-zinc-50 dark:bg-zinc-900">
-                      <div>
-                        <p className="text-sm font-medium text-zinc-900 dark:text-white">{cl.itemName}</p>
-                        <p className="text-xs text-zinc-500">{cl.company?.shortName} - {cl.addressedTo}</p>
-                      </div>
-                      <Badge variant={cl.type === "technical" ? "default" : "secondary"} className={cl.type === "technical" ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300" : "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"}>
-                        {cl.type}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-zinc-400 text-center py-8">No cover letters yet</p>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="border-zinc-200 dark:border-zinc-800">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-lg">Recent Tags</CardTitle>
-              <Button variant="ghost" size="sm" asChild>
-                <Link href="/dashboard/tags">View All <ArrowRight className="w-4 h-4 ml-1" /></Link>
-              </Button>
-            </CardHeader>
-            <CardContent>
-              {data?.recentTags?.length > 0 ? (
-                <div className="space-y-3">
-                  {data.recentTags.map((tag) => (
-                    <div key={tag._id} className="flex items-center justify-between p-3 rounded-lg bg-zinc-50 dark:bg-zinc-900">
-                      <div>
-                        <p className="text-sm font-medium text-zinc-900 dark:text-white">{tag.itemName}</p>
-                        <p className="text-xs text-zinc-500">{tag.company?.shortName}</p>
-                      </div>
-                      <Badge variant="outline" className="text-xs">{tag.tagType}</Badge>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-zinc-400 text-center py-8">No tags yet</p>
-              )}
-            </CardContent>
-          </Card>
-        </div>
       </div>
-    </>
+    </div>
   );
 }
